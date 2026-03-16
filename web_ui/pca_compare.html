@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>PCA Аналіз Буфера</title>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: #0b0b0b; color: white; overflow: hidden; display: flex; flex-direction: column; height: 100vh;}
+        #header { padding: 15px 30px; background: #111; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; z-index: 10;}
+        
+        .header-left { display: flex; align-items: center; }
+        .btn-back { background: #333; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-right: 30px; font-size: 14px;}
+        .btn-back:hover { background: #555; }
+        
+        .header-titles h2 { margin: 0; color: #fff; font-size: 22px; letter-spacing: 0.5px;}
+        .header-titles .subtitle { font-size: 13px; color: #888; margin-top: 4px;}
+        
+        #plots-wrapper { display: flex; flex: 1; width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden;}
+        .plot-column { flex: 1; min-width: 950px; border-right: 1px solid #333; display: flex; flex-direction: column; height: 100%;}
+        .plot-column:last-child { border-right: none; }
+        
+        .plot-header { text-align: center; padding: 12px; background: #1a1a1a; border-bottom: 1px solid #333; font-weight: bold; color: #b2ff59; text-transform: uppercase; letter-spacing: 1px; font-size: 14px;}
+        .plot-wrapper-inner { display: flex; flex: 1; width: 100%; height: 100%; overflow: hidden;}
+        .plot-container { flex: 1; position: relative; height: 100%; }
+        
+        /* ПАНЕЛЬ АНАЛІТИКИ */
+        .loadings-panel { width: 380px; min-width: 380px; background: rgba(15, 15, 20, 0.98); border-left: 1px solid #333; padding: 25px 25px; overflow-y: auto; box-sizing: border-box; transition: all 0.3s; }
+        .loadings-panel::-webkit-scrollbar { width: 4px; }
+        .loadings-panel::-webkit-scrollbar-thumb { background: #555; border-radius: 2px; }
+        
+        /* СТИЛІ ДИНАМІЧНОГО КОНТЕНТУ (Hover) */
+        .dynamic-info h3 { margin: 0 0 5px 0; color: #00ff88; font-size: 20px; line-height: 1.2; padding-bottom: 10px; border-bottom: 1px solid #333;}
+        .dynamic-info .date-badge { display: inline-block; padding: 4px 10px; background: #222; border-radius: 4px; font-size: 13px; margin-bottom: 20px; color: #00bfff; font-weight: bold; border: 1px solid #444; margin-top: 15px;}
+        
+        .stat-block-title { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 5px; font-weight: bold; letter-spacing: 0.5px;}
+        .stat-block-value { font-size: 28px; font-weight: bold; margin-bottom: 25px; color: #fff;}
+        .stat-block-value span { font-size: 14px; color: #666; font-weight: normal;}
+        
+        .section-divider { height: 1px; background: #333; margin: 20px 0; }
+        .section-title { font-size: 14px; color: #fff; margin-bottom: 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;}
+        
+        .stat-row { margin-bottom: 12px; }
+        .stat-label { font-size: 12px; color: #ccc; margin-bottom: 6px; display: flex; justify-content: space-between; line-height: 1.3;}
+        .stat-label .name { padding-right: 15px; }
+        .stat-label .val { font-weight: bold; color: #00ff88; }
+        .progress-bg { height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #00ff88; border-radius: 3px; transition: width 0.3s ease-out; }
+
+        .overall-item { font-size: 12px; padding: 8px 10px; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; color: #aaa;}
+        .overall-item span:last-child { color: #fff; font-weight: bold; }
+
+        /* СТИЛІ СТАТИЧНОГО КОНТЕНТУ (Default) */
+        .pc-title { color: #b2ff59; font-size: 14px; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 5px; margin-top: 25px; }
+        .feat-item { font-size: 12px; margin-bottom: 8px; display: flex; align-items: flex-start; line-height: 1.4; padding: 6px 8px; background: rgba(255,255,255,0.02); border-radius: 4px;}
+        .feat-weight { width: 55px; font-weight: bold; flex-shrink: 0; text-align: right; padding-right: 15px;}
+        .pos { color: #00ff88; border-left: 2px solid #00ff88;} 
+        .neg { color: #ff1744; border-left: 2px solid #ff1744;}
+
+        #loading { position: absolute; top:0; left:0; width:100%; height:100%; background: #0b0b0b; display: flex; justify-content: center; align-items: center; flex-direction: column; z-index: 100;}
+        .spinner { width: 50px; height: 50px; border: 5px solid rgba(0,255,136,0.3); border-top-color: #00ff88; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;}
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; color: #666; text-align: center;}
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <h2 style="color: #00ff88;" id="loading-text">Аналіз траєкторій...</h2>
+    </div>
+
+    <div id="header">
+        <div class="header-left">
+            <button class="btn-back" onclick="window.parent.closeCompareScreen()">🡠 Назад до карти</button>
+            <div class="header-titles">
+                <h2>3D Траєкторії Бюджетів</h2>
+                <div class="subtitle">Наведіть курсор на кульку для розбору щомісячної структури</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="plots-wrapper"></div>
+
+    <script>
+        const colors = ['#00ff88', '#00bfff', '#ff1744', '#ffeb3b', '#ff4081', '#00e5ff', '#76ff03', '#b2ff59', '#ffff00', '#ff9100'];
+        const levelNames = { 'l1': 'Обласні Бюджети', 'l2': 'Районні Бюджети', 'l3': 'Бюджети Громад' };
+        
+        const catNames = {
+            'income': 'Доходи (Власні)',
+            'prog': 'Видатки (КПКВК)',
+            'econ': 'Видатки (КЕКВ)',
+            'func': 'Видатки (ФКВК)'
+        };
+
+        let buffer = JSON.parse(localStorage.getItem('compareBuffer')) || [];
+        
+        // Зберігаємо завантажені дані: { 'income': {...}, 'prog': {...} }
+        let pcaCache = {};
+
+        async function init() {
+            if (buffer.length === 0) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('plots-wrapper').innerHTML = `
+                    <div class="empty-state">
+                        <h2>Буфер порожній</h2>
+                        <p>Поверніться на карту та додайте громади/райони до буфера (кнопка в правій панелі).</p>
+                    </div>`;
+                return;
+            }
+
+            try {
+                // Визначаємо, які категорії PCA нам потрібні (у буфері можуть бути збережені громади з різними обраними індексами)
+                const requiredCategories = [...new Set(buffer.map(item => item.pcaCategory || 'income'))];
+                
+                document.getElementById('loading-text').innerText = `Завантаження PCA моделей (${requiredCategories.length})...`;
+
+                // Завантажуємо всі потрібні файли паралельно
+                const fetchPromises = requiredCategories.map(cat => 
+                    fetch(`/api/pca_data/${cat}`).then(res => res.json()).then(data => { pcaCache[cat] = data; })
+                );
+                
+                await Promise.all(fetchPromises);
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                const wrapper = document.getElementById('plots-wrapper');
+                
+                // Групуємо буфер за рівнем І за категорією
+                const groupedBuffer = {};
+                buffer.forEach(item => {
+                    const cat = item.pcaCategory || 'income';
+                    const key = `${item.level}_${cat}`;
+                    if (!groupedBuffer[key]) groupedBuffer[key] = { level: item.level, cat: cat, items: [] };
+                    groupedBuffer[key].items.push(item);
+                });
+
+                // Малюємо колонку для кожної групи
+                Object.values(groupedBuffer).forEach(group => {
+                    const colDiv = document.createElement('div');
+                    colDiv.className = 'plot-column';
+                    
+                    const catTitle = catNames[group.cat] || group.cat.toUpperCase();
+                    const defaultPanelHtml = generateDefaultPanel(group.level, group.cat);
+
+                    colDiv.innerHTML = `
+                        <div class="plot-header">${levelNames[group.level]} <span style="color:#fff; font-weight:normal; font-size:12px;">| ${catTitle}</span></div>
+                        <div class="plot-wrapper-inner">
+                            <div id="plot-${group.level}-${group.cat}" class="plot-container"></div>
+                            <div id="panel-${group.level}-${group.cat}" class="loadings-panel">${defaultPanelHtml}</div>
+                        </div>
+                    `;
+                    wrapper.appendChild(colDiv);
+
+                    renderChart(group.level, group.cat, group.items);
+                });
+
+            } catch (e) { 
+                console.error(e); 
+                document.getElementById('loading-text').innerText = "Помилка завантаження даних!";
+                document.getElementById('loading-text').style.color = "#ff1744";
+            }
+        }
+
+        function generateDefaultPanel(level, cat) {
+            const meta = pcaCache[cat]?.metadata[level];
+            if (!meta) return `<div style="color:#ff1744; padding:20px;">Помилка: Немає метаданих для осей (${cat}/${level})</div>`;
+            
+            let html = `<h2 style="font-size:22px; margin-bottom:5px; margin-top:0;">PCA осі</h2>`;
+            
+            ['PC1', 'PC2', 'PC3'].forEach(pc => {
+                html += `<div class="pc-title">${pc === 'PC1' ? 'Вісь X (Головна)' : pc === 'PC2' ? 'Вісь Y (Вторинна)' : 'Вісь Z (Глибина)'}</div>`;
+                meta[pc].forEach(f => {
+                    const isPos = f.direction === 'positive';
+                    // Обрізаємо занадто довгі назви
+                    const shortName = f.name.length > 55 ? f.name.substring(0, 55) + '...' : f.name;
+                    html += `<div class="feat-item ${isPos?'pos':'neg'}">
+                                <span class="feat-weight">${isPos?'+':''}${f.weight.toFixed(2)}</span>
+                                <span title="${f.name}">${shortName}</span>
+                             </div>`;
+                });
+            });
+            return html;
+        }
+
+        function renderChart(level, cat, items) {
+            const pcaData = pcaCache[cat]?.trajectories;
+            if (!pcaData) return;
+
+            const traces = [];
+            let maxLog = 0;
+
+            // Відфільтрувати унікальні громади в цьому графіку
+            [...new Set(items.map(b => b.code))].forEach((code, idx) => {
+                const info = pcaData[code];
+                if (!info) return;
+                
+                // Рахуємо розмір кульок на основі бюджету
+                const logs = info.size_mln.map(v => Math.max(0, Math.log1p(v * 1e6)));
+                if(logs.length > 0) { maxLog = Math.max(maxLog, ...logs); }
+
+                traces.push({
+                    type: 'scatter3d', mode: 'lines+markers', name: info.name,
+                    x: info.pc1, y: info.pc2, z: info.pc3,
+                    hoverinfo: 'none', 
+                    customdata: info.dates.map((d, i) => ({
+                        name: info.name, date: d, size: info.size_mln[i], 
+                        factors: info.top_factors[i], overall: info.overall_top_5, 
+                        color: colors[idx % colors.length]
+                    })),
+                    line: { width: 4, color: colors[idx % colors.length] },
+                    marker: { sizemode: 'area', size: logs, color: colors[idx % colors.length], opacity: 0.8, line: {width:1, color:'#fff'} }
+                });
+            });
+
+            if (traces.length === 0) return;
+
+            const sizeref = maxLog > 0 ? (2.0 * maxLog / (40 ** 2)) : 1;
+            traces.forEach(t => t.marker.sizeref = sizeref);
+
+            const plotId = `plot-${level}-${cat}`;
+            const panelId = `panel-${level}-${cat}`;
+
+            setTimeout(() => {
+                Plotly.newPlot(plotId, traces, {
+                    paper_bgcolor: '#0b0b0b', font: {color: '#fff'}, margin: {l:0,r:0,b:0,t:0},
+                    showlegend: true, legend: { x: 0, y: 1, font: {size: 11}, bgcolor: 'rgba(0,0,0,0.5)' },
+                    scene: { 
+                        aspectmode: 'cube', 
+                        xaxis: {gridcolor:'#333', zerolinecolor: '#555', title: 'PC1'}, 
+                        yaxis: {gridcolor:'#333', zerolinecolor: '#555', title: 'PC2'}, 
+                        zaxis: {gridcolor:'#333', zerolinecolor: '#555', title: 'PC3'} 
+                    }
+                }, {responsive: true});
+
+                const plotElem = document.getElementById(plotId);
+                const panelElem = document.getElementById(panelId);
+
+                // --- ІНТЕРАКТИВ ---
+                plotElem.on('plotly_hover', function(data) {
+                    const d = data.points[0].customdata;
+                    
+                    // Генеруємо HTML для локальних факторів (Місяць)
+                    let factorsHtml = d.factors.map(f => `
+                        <div class="stat-row">
+                            <div class="stat-label"><span class="name">${f.name}</span><span class="val">${f.share}%</span></div>
+                            <div class="progress-bg"><div class="progress-fill" style="width:${f.share}%; background:${d.color}"></div></div>
+                        </div>
+                    `).join('');
+
+                    // Генеруємо HTML для глобальних факторів (8 років)
+                    let overallHtml = '';
+                    if (d.overall && d.overall.length > 0) {
+                        overallHtml = d.overall.map(f => `
+                            <div class="overall-item">
+                                <span title="${f.name}">${f.name.length > 35 ? f.name.substring(0,35)+'...' : f.name}</span>
+                                <span>${f.share}%</span>
+                            </div>
+                        `).join('');
+                        
+                        overallHtml = `
+                            <div class="section-divider"></div>
+                            <div class="section-title">Середній профіль (2018-2025)</div>
+                            ${overallHtml}
+                        `;
+                    }
+
+                    panelElem.innerHTML = `
+                        <div class="dynamic-info">
+                            <h3 style="color:${d.color}">${d.name}</h3>
+                            <div class="date-badge">${d.date}</div>
+                            
+                            <div class="stat-block-title">Обіг за місяць</div>
+                            <div class="stat-block-value">${d.size.toLocaleString()} <span>млн ₴</span></div>
+
+                            <div class="section-title">Структура цього місяця (ТОП-5)</div>
+                            ${factorsHtml}
+                            
+                            ${overallHtml}
+                            
+                            <p style="font-size:11px; color:#555; margin-top:30px; font-style:italic; text-align:center;">Приберіть курсор, щоб повернути опис осей</p>
+                        </div>
+                    `;
+                });
+
+                plotElem.on('plotly_unhover', function() {
+                    panelElem.innerHTML = generateDefaultPanel(level, cat);
+                });
+
+            }, 50);
+        }
+
+        init();
+    </script>
+</body>
+</html>

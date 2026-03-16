@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ukraine: Budget Analytics</title>
+    <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+    <script src='https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href='https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css' rel='stylesheet' />
+    <style>
+      /* --- КНОПКИ РЕЖИМУ ПРЕЗЕНТАЦІЇ --- */
+/* --- КНОПКА РЕЖИМУ ПРЕЗЕНТАЦІЇ (ПРАВИЙ КУТ) --- */
+      #btn-zen-mode { 
+          position: absolute; 
+          bottom: 200px; /* Третій поверх: над Legacy Dashboard */
+          right: 20px; 
+          z-index: 10; 
+          background: rgba(30, 30, 40, 0.9); 
+          border: 1px solid #555; 
+          color: #fff; 
+          padding: 12px 20px; 
+          border-radius: 8px; 
+          font-weight: bold; 
+          cursor: pointer; 
+          transition: 0.3s; 
+          backdrop-filter: blur(5px); 
+      }
+      #btn-zen-mode:hover { 
+          background: #00ff88; 
+          color: #000; 
+          border-color: #00ff88; 
+      }
+    
+      #btn-exit-zen { display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(255, 23, 68, 0.9); color: white; border: 1px solid #ff1744; padding: 10px 25px; border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px); transition: 0.2s; }
+      #btn-exit-zen:hover { background: #d50000; padding: 10px 35px; }
+
+      /* --- МАГІЯ ЗНИКНЕННЯ (ZEN MODE) --- */
+      body.zen-mode #btn-author,
+      body.zen-mode #btn-old-dash,
+      body.zen-mode #compare-widget,
+      body.zen-mode #search-container,
+      body.zen-mode input[type="range"],
+      body.zen-mode select,
+      body.zen-mode label,
+      body.zen-mode #data-controls,
+      body.zen-mode #index-controls,
+      body.zen-mode #btn-zen-mode {
+          display: none !important;
+      }
+
+      body.zen-mode #control-panel {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          pointer-events: none; /* Карта клікається крізь невидиму панель */
+      }
+
+      body.zen-mode .legend {
+          background: rgba(15, 15, 20, 0.85); /* Темний фон під легенду для білої карти */
+          padding: 15px;
+          border-radius: 8px;
+          border: 1px solid #444;
+          pointer-events: auto;
+          box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+      }
+      
+      body.zen-mode #year-display {
+          text-align: left;
+          font-size: 64px; /* Робимо рік гігантським */
+          text-shadow: 2px 2px 10px rgba(0,0,0,0.9); /* Щоб читався на світлому фоні */
+          margin-bottom: 20px;
+      }
+
+      body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: #0b0b0b; color: white; overflow: hidden; }
+      #container { width: 100vw; height: 100vh; position: relative; }
+      
+      #loading-screen { position: absolute; top:0; left:0; width:100%; height:100%; background: #0b0b0b; z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      #control-panel { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(15, 15, 20, 0.95); padding: 25px; border-radius: 12px; width: 360px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); backdrop-filter: blur(5px); display: none; max-height: 90vh; overflow-y: auto;}
+      #control-panel::-webkit-scrollbar { width: 4px; }
+      #control-panel::-webkit-scrollbar-thumb { background: #555; border-radius: 2px; }
+
+      h2 { margin: 0 0 10px 0; font-size: 22px; color: #00ff88; letter-spacing: 0.5px; }
+      label { font-size: 11px; color: #888; text-transform: uppercase; margin-top: 15px; display: block; font-weight: bold; }
+      select { width: 100%; padding: 10px; background: #222; color: white; border: 1px solid #555; border-radius: 6px; font-size: 14px; margin-top: 5px; cursor: pointer; transition: all 0.2s; }
+      select:hover { border-color: #00ff88; }
+      
+      #view-mode { background: #1a1a24; border-color: #00ff88; color: #00ff88; font-weight: bold; }
+
+      #search-container { position: relative; margin-bottom: 15px; margin-top: 5px; }
+      #search-input { width: 100%; padding: 12px; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none; transition: border-color 0.2s; }
+      #search-input:focus { border-color: #00ff88; }
+      #search-results { position: absolute; top: 100%; left: 0; width: 100%; background: #15151c; border: 1px solid #444; border-top: none; max-height: 250px; overflow-y: auto; z-index: 100; display: none; border-radius: 0 0 6px 6px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+      .search-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #333; font-size: 13px; color: #ccc; transition: all 0.2s; }
+      .search-item:hover { background: #00ff88; color: #000; font-weight: bold; }
+
+      .legend { font-size: 13px; color: #ccc; border-top: 1px solid #444; padding-top: 15px; margin-top: 20px; line-height: 1.6; }
+      .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+      #year-display { font-size: 38px; font-weight: bold; color: #00ff88; text-align: center; margin-top: 10px; text-shadow: 0 2px 10px rgba(0,255,136,0.3); }
+      input[type=range] { width: 100%; margin-top: 10px; cursor: pointer; accent-color: #00ff88; }
+      
+      /* Legend clusters */
+      #legend-clusters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+      .cluster-item { font-size: 11px; display: flex; align-items: center; }
+
+      /* Compare Widget */
+      #compare-widget { position: absolute; top: 20px; right: 20px; z-index: 10; background: rgba(15, 15, 20, 0.95); padding: 15px; border-radius: 12px; border: 1px solid #444; box-shadow: 0 8px 25px rgba(0,0,0,0.7); backdrop-filter: blur(5px); width: 280px; display: none; }
+      #compare-list { margin: 10px 0; min-height: 40px; display: flex; flex-direction: column; gap: 8px; }
+      .compare-li { padding: 8px; background: #222; border-radius: 6px; border: 1px solid #333; display: flex; flex-direction: column;}
+      .compare-li-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 13px; color: #fff; font-weight: bold;}
+      .compare-li-desc { font-size: 11px; color: #aaa; line-height: 1.2;}
+      .compare-li-remove { color: #ff1744; cursor: pointer; font-weight: bold; font-size: 14px;}
+      
+      .action-btns { display: flex; gap: 10px; margin-top: 10px; }
+      .btn-action { flex: 1; padding: 10px 5px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 12px;}
+      .btn-action:disabled { background: #333 !important; color: #666 !important; cursor: not-allowed; }
+      #btn-go-compare { background: #00ff88; color: #000; }
+      #btn-go-pca { background: #b2ff59; color: #000; }
+
+    #btn-old-dash { 
+        position: absolute; 
+        bottom: 140px; /* Підняли, щоб звільнити місце для кнопки авторів */
+        right: 20px;   /* Перенесли на правий край екрану */
+        z-index: 10; 
+        background: rgba(30, 30, 40, 0.9); 
+        border: 1px solid #555; 
+        color: #aaa; 
+        padding: 12px 20px; 
+        border-radius: 8px; 
+        font-weight: bold; 
+        cursor: pointer; 
+        transition: 0.3s; 
+        backdrop-filter: blur(5px); 
+        display: none; 
+    }
+      #btn-old-dash:hover { background: #00ff88; color: #000; border-color: #00ff88; }
+
+      #btn-close-iframe { display: none; position: absolute; top: 120px; left: 20px; z-index: 4000; background: #ff1744; color: white; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-size: 14px; transition: 0.2s; }
+      #btn-close-iframe:hover { background: #d50000; transform: scale(1.05); }
+
+      /* Author Button & Modal */
+      #btn-author { position: absolute; bottom: 80px; right: 20px; z-index: 10; background: rgba(255, 22, 177, 0.8); border: 1px solid #444; color: #ffffff; padding: 10px 15px; border-radius: 6px; cursor: pointer; transition: 0.3s; backdrop-filter: blur(5px); font-size: 14px; }
+      #btn-author:hover { background: #ffffff; color: #000; border-color: #ffffff; font-weight: bold; }
+
+      .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); z-index: 5000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+      .modal-content { 
+            background-color: #ffffff !important; 
+            background: #ffffff !important;
+            color: #000000 !important;
+            border: 2px solid #eeeeee !important;
+            padding: 40px; 
+            border-radius: 12px; 
+            text-align: center; 
+            position: relative; 
+            min-width: 320px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
+        }
+
+      .modal-content:hover { background: #ffffff; color: #ffffff; }
+      .modal-close { position: absolute; top: 10px; right: 15px; background: none; border: none; color: #aaa; font-size: 28px; cursor: pointer; transition: 0.2s; }
+      .modal-close:hover { color: #fff; }
+      .modal-content h3 { color: #000000; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+      .modal-content p { color: #ff0073; font-size: 26px; margin: 15px 0; font-weight: bold; text-shadow: 0 0 10px rgba(0,255,136,0.2); }
+      .modal-content a.github-btn { color: #000000; text-decoration: none; font-size: 16px; padding: 12px 25px; border: 1px solid #00bfff; border-radius: 6px; display: inline-block; margin-top: 15px; transition: 0.2s; }
+      .modal-content a.github-btn:hover { background: #000000; color: #ffffff; font-weight: bold; }
+      .modal-content a.logo-link { display: inline-block; margin-top: 35px; transition: transform 0.2s; }
+      .modal-content a.logo-link:hover { transform: scale(1.05); }
+
+      /* Side Panel */
+      #side-panel { position: absolute; right: -700px; top: 0; width: 600px; height: 100vh; background: rgba(15, 15, 20, 0.97); border-left: 1px solid #444; box-shadow: -10px 0 30px rgba(0,0,0,0.8); backdrop-filter: blur(10px); transition: right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); z-index: 20; padding: 30px; box-sizing: border-box; overflow-y: auto; }
+      #side-panel.open { right: 0; }
+      .close-btn { position: absolute; top: 20px; right: 25px; color: #aaa; font-size: 28px; cursor: pointer; background: none; border: none; transition: color 0.2s; }
+      .close-btn:hover { color: #fff; }
+      #sp-title { font-size: 26px; color: #fff; margin-bottom: 5px; margin-top: 0; padding-right: 30px; line-height: 1.2; }
+      #sp-subtitle { font-size: 14px; color: #888; margin-bottom: 15px; }
+
+      #btn-select-compare { background: #2b82d9; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 25px; width: 100%; font-size: 14px; transition: 0.2s;}
+      #btn-select-compare:hover { filter: brightness(1.2); }
+      
+      #charts-container { display: flex; flex-direction: column; gap: 20px; padding-bottom: 50px; }
+      .chart-wrapper { height: 260px; width: 100%; background: rgba(25, 25, 30, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #333; box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <button id="btn-exit-zen" onclick="toggleZenMode()">✖ Вийти з режиму презентації (ESC)</button>
+
+    <div id="loading-screen">
+        <div id="progress-text" style="color: #fff; font-size: 28px; font-weight: bold; margin-top: 10px;">0%</div>
+        <div style="width: 280px; height: 6px; background: #222; border-radius: 4px; margin-top: 15px; overflow: hidden; border: 1px solid #444;">
+            <div id="progress-bar" style="width: 0%; height: 100%; background: #00ff88; transition: width 0.4s ease-out; box-shadow: 0 0 10px rgba(0,255,136,0.6);"></div>
+        </div>
+        <div id="loading-details" style="color: #888; font-size: 13px; margin-top: 12px; font-family: monospace;">Connecting to server...</div>
+    </div>
+
+    <div id="author-modal" class="modal-overlay" onclick="if(event.target === this) closeAuthorModal()">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeAuthorModal()">×</button>
+            <h3>Authors</h3>
+            
+            <a href="https://github.com/tempdeltavalue" target="_blank" class="github-btn">
+                <svg height="40" width="40" viewBox="0 0 16 16" style="fill: currentColor; vertical-align: middle; margin-right: 10px;">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.58-.18-3.24-.79-3.24-3.52 0-.78.28-1.42.75-1.92-.07-.18-.33-.9.07-1.89 0 0 .6-.19 1.98.74.57-.16 1.18-.24 1.79-.24.61 0 1.22.08 1.79.24 1.38-.94 1.98-.74 1.98-.74.4.99.14 1.71.07 1.89.47.5 0.75 1.14.75 1.92 0 2.74-1.67 3.33-3.25 3.51.26.22.48.65.48 1.3 0 .94-.01 1.69-.01 1.92 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                </svg>
+                tempdeltavalue
+            </a>
+            
+            <div>
+                <a href="https://lntu.edu.ua/" target="_blank" class="logo-link">
+                    <img src="https://lntu.edu.ua/sites/default/files/logo/logo-lntu-svg2.svg" alt="LNTU" style="height: 60px;">
+                </a>
+            </div>
+
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                <h3 style="color: #888; margin-bottom: 15px;">THANKS TO:</h3>
+                <a href="https://openbudget.gov.ua/" target="_blank" class="logo-link" style="margin-top: 0;">
+                    <img src="https://openbudget.gov.ua/logo_social.png" alt="Open Budget" style="height: 40px; border-radius: 6px;">
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <button id="btn-close-iframe" onclick="closeCompareScreen()">🡠 Return to Main Map</button>
+
+    <iframe id="app-iframe" src="" style="display:none; position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:3000; border:none; background:#0b0b0b;"></iframe>
+    <button id="btn-zen-mode" onclick="toggleZenMode()">Режим презентації</button>
+    <button id="btn-old-dash" onclick="openOldDashboard()">Legacy Dashboard Version</button>
+    <button id="btn-author" onclick="openAuthorModal()">About the Authors</button>
+
+    <div id="compare-widget">
+        <h3 style="margin-top:0; font-size:16px;">Analytical Buffer (<span id="compare-count">0</span>/4)</h3>
+        <div id="compare-list">No saved items</div>
+        <div class="action-btns">
+            <button id="btn-go-compare" class="btn-action" onclick="openScreen('/compare')" disabled>📊 Charts</button>
+            <button id="btn-go-pca" class="btn-action" onclick="openScreen('/pca_compare')" disabled>3D PCA</button>
+        </div>
+    </div>
+
+    <div id="control-panel">
+      <div id="search-container">
+          <input type="text" id="search-input" placeholder="Search community/district..." autocomplete="off">
+          <div id="search-results"></div>
+      </div>
+      <div id="year-display">2024</div>
+      <input type="range" id="year-slider" min="2018" max="2025" step="1" value="2024">
+      
+      <label>Base Mode</label>
+      <select id="view-mode"></select>
+
+      <label>Administrative Level</label>
+      <select id="level-switcher"></select>
+
+      <div id="data-controls">
+          <label>1. Category</label>
+          <select id="main-metric"></select>
+          
+          <label id="lbl-det">2. Level of Detail</label>
+          <select id="detail-lvl"></select>
+          
+          <label id="lbl-sub">3. Select item on map</label>
+          <select id="sub-metric"></select>
+      </div>
+
+      <div id="index-controls" style="display:none;">
+          <label>Analytical Index & Accuracy</label>
+          <select id="index-metric"></select>
+      </div>
+
+      <div class="legend" id="legend-bal">
+        <span class="dot" style="background:#00e676"></span> Surplus<br>
+        <span class="dot" style="background:#ff1744"></span> Deficit<br>
+      </div>
+      <div class="legend" id="legend-heat" style="display:none;">
+        <div style="margin-bottom: 8px;">Sum Intensity (Heatmap)</div>
+        <div style="height:12px; width:100%; background: linear-gradient(to right, rgb(30,10,60), rgb(120,20,100), rgb(220,60,50), rgb(255,140,0), rgb(255,255,100)); border-radius: 6px;"></div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-top:4px;"><span>Low</span><span>High</span></div>
+      </div>
+      <div class="legend" id="legend-cluster" style="display:none;">
+          <div style="margin-bottom: 8px;">Clustering (Color: Group, Height: Distance to Center)</div>
+          <div id="legend-clusters"></div>
+      </div>
+    </div>
+    
+    <div id="side-panel">
+        <button class="close-btn" onclick="closePanel()">×</button>
+        <h2 id="sp-title">Name</h2>
+        <div id="sp-subtitle">Dynamics 2018-2025</div>
+        <button id="btn-select-compare" onclick="toggleCompareItem()">+ Save to Buffer</button>
+        <div id="charts-container"></div>
+    </div>
+
+    <div id="container"></div>
+    <script src="loader.js"></script>
+    <script src="index.js"></script>
+
+  </body>
+</html>
