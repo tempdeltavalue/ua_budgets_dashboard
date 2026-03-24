@@ -15,16 +15,10 @@ INCOME_WEIGHTS = {
     '18010900': 0.8,  
     '21081100': 0.5,  
     '41020100': -1.0, 
-    '41030600': -1.0, 
-    '41030800': -1.0, 
-    '41050300': -1.0, 
-    '41050700': -1.0, 
     '41033900': -0.5  
 }
 
 PROG_WEIGHTS = {
-    '7365': 1.0,  
-    '7362': 1.0,  
     '1184': 1.0,  
     '7413': 0.5,  
     '1021': 0.0,  
@@ -33,10 +27,7 @@ PROG_WEIGHTS = {
     '0160': 0.0,  
     '8600': -0.5, 
     '7692': -1.0, 
-    '9220': -1.0, 
-    '9230': -1.0, 
-    '9250': -1.0, 
-    '9210': -1.0  
+    '9220': -1.0 
 }
 
 EXPERT_WEIGHTS = {
@@ -45,10 +36,13 @@ EXPERT_WEIGHTS = {
 }
 
 def get_zone(score):
-    if score >= 30: return " ЗЕЛЕНА (Автономні / Інвестори)"
-    elif score >= -10: return " ЖОВТА (Транзитні / Стагнація)"
-    else: return " ЧЕРВОНА (Банкрути / Реципієнти)"
+    if score >= 30: return "ЗЕЛЕНА (Автономні / Інвестори)"
+    elif score >= -10: return "ЖОВТА (Транзитні / Стагнація)"
+    else: return "ЧЕРВОНА (Банкрути / Реципієнти)"
 
+print(f"\n{'='*80}")
+print(f"РОЗРАХУНОК ФІНАНСОВОГО ЗДОРОВ'Я ТА ТОП-ГРОМАД (Рівень: {LEVEL.upper()})")
+print(f"{'='*80}")
 
 comp_dir = os.path.join(DATA_DIR, f"{N_COMP}_comp")
 
@@ -83,7 +77,6 @@ for cat_key in ['income', 'prog']:
     latest_year = sorted(clus_data.get(LEVEL, {}).keys())[-1]
     current_clusters = clus_data[LEVEL][latest_year]
     
-    # Збираємо всі дані про громади поточного року
     members_data = []
     
     for code, info in trajectories.items():
@@ -101,7 +94,6 @@ for cat_key in ['income', 'prog']:
             coords['cluster'] = cluster_id
             cluster_records.append(coords)
             
-            # Зберігаємо дані для пошуку ТОП-3
             members_data.append({
                 'cluster': cluster_id,
                 'name': info.get('name', f'Громада {code}'),
@@ -130,7 +122,7 @@ for cat_key in ['income', 'prog']:
         
     ratings_df = ratings_df.sort_values('Score_100', ascending=False)
     
-    print(f"\n📌 КАТЕГОРІЯ: {cat_key.upper()} (Рік: {latest_year})")
+    print(f"\nКАТЕГОРІЯ: {cat_key.upper()} (Рік: {latest_year})")
     print("-" * 80)
     print(f"{'Кл.':<5} | {'Рейтинг':<8} | {'Діагноз / Зона'}")
     print("-" * 80)
@@ -142,7 +134,6 @@ for cat_key in ['income', 'prog']:
         
         print(f"{c_id:<5} | {score:>8} | {zone}")
         
-        # Знаходимо ТОП-3 громади з найменшою відстанню до центру
         if not members_df.empty:
             c_members = members_df[members_df['cluster'] == c_id]
             top_3 = c_members.sort_values('distance').head(3)
