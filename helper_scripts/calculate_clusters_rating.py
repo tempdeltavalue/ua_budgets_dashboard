@@ -8,26 +8,26 @@ N_COMP = 3
 LEVEL = 'l3' 
 
 INCOME_WEIGHTS = {
-    '11010400': 1.0,  
-    '18050400': 1.0,  
-    '18050500': 1.0,  
-    '18010600': 0.8,  
-    '18010900': 0.8,  
-    '21081100': 0.5,  
-    '41020100': -1.0, 
-    '41033900': -0.5  
+    '11010400': 1.0,  # Personal Income Tax (PIT) from military personnel (the "military" PIT - a major revenue source until 2024)
+    '18050400': 1.0,  # Single tax from individuals (marker of local small business and entrepreneurial activity)
+    '18050500': 1.0,  # Single tax from agricultural producers (marker of agricultural sector strength)
+    '18010600': 0.8,  # Rent from legal entities (indicates effective management of municipal property)
+    '18010900': 0.8,  # Rent from individuals 
+    '21081100': 0.5,  # Administrative fines and sanctions (additional local revenue sources)
+    '41020100': -1.0, # Basic dotation from the state (a strong marker of deep financial dependence and municipal incapacity)
+    '41033900': -0.5  # Educational subvention from the state budget (indicates reliance on central transfers for basic needs)
 }
 
 PROG_WEIGHTS = {
-    '1184': 1.0,  
-    '7413': 0.5,  
-    '1021': 0.0,  
-    '1091': 0.0,  
-    '2010': 0.0,  
-    '0160': 0.0,  
-    '8600': -0.5, 
-    '7692': -1.0, 
-    '9220': -1.0 
+    '1184': 1.0,  # Provision of water supply and sewage systems (indicates capital/infrastructure investments)
+    '7413': 0.5,  # Design, restoration, and protection of architectural monuments (marker of "discretionary" funds available for development)
+    '1021': 0.0,  # Provision of general secondary education (basic/mandatory social expenditures, typically covered by subventions)
+    '1091': 0.0,  # Maintenance of children's and youth sports schools (basic social development)
+    '2010': 0.0,  # Multidisciplinary inpatient medical care (basic healthcare provision)
+    '0160': 0.0,  # Local leadership and management (standard administrative and local council maintenance)
+    '8600': -0.5, # Reserve fund (often indicates operation under high uncertainty or emergency response)
+    '7692': -1.0, # Other activities related to economic activity (frequently used to obscure non-transparent expenditures or patch budget deficits)
+    '9220': -1.0  # Provision of loans to enterprises/institutions (high risk of inefficient fund allocation or subsidizing loss-making municipal enterprises)
 }
 
 EXPERT_WEIGHTS = {
