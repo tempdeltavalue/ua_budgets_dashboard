@@ -8,26 +8,26 @@ N_COMP = 3
 LEVEL = 'l3' 
 
 INCOME_WEIGHTS = {
-    '11010400': 1.0,  # Personal Income Tax (PIT) from military personnel (the "military" PIT - a major revenue source until 2024)
-    '18050400': 1.0,  # Single tax from individuals (marker of local small business and entrepreneurial activity)
-    '18050500': 1.0,  # Single tax from agricultural producers (marker of agricultural sector strength)
-    '18010600': 0.8,  # Rent from legal entities (indicates effective management of municipal property)
-    '18010900': 0.8,  # Rent from individuals 
-    '21081100': 0.5,  # Administrative fines and sanctions (additional local revenue sources)
-    '41020100': -1.0, # Basic dotation from the state (a strong marker of deep financial dependence and municipal incapacity)
-    '41033900': -0.5  # Educational subvention from the state budget (indicates reliance on central transfers for basic needs)
+    '11010400': 1.0,  
+    '18050400': 1.0,  
+    '18050500': 1.0,  
+    '18010600': 0.8,  
+    '18010900': 0.8,  
+    '21081100': 0.5,  
+    '41020100': -1.0, 
+    '41033900': -0.5  
 }
 
 PROG_WEIGHTS = {
-    '1184': 1.0,  # Provision of water supply and sewage systems (indicates capital/infrastructure investments)
-    '7413': 0.5,  # Design, restoration, and protection of architectural monuments (marker of "discretionary" funds available for development)
-    '1021': 0.0,  # Provision of general secondary education (basic/mandatory social expenditures, typically covered by subventions)
-    '1091': 0.0,  # Maintenance of children's and youth sports schools (basic social development)
-    '2010': 0.0,  # Multidisciplinary inpatient medical care (basic healthcare provision)
-    '0160': 0.0,  # Local leadership and management (standard administrative and local council maintenance)
-    '8600': -0.5, # Reserve fund (often indicates operation under high uncertainty or emergency response)
-    '7692': -1.0, # Other activities related to economic activity (frequently used to obscure non-transparent expenditures or patch budget deficits)
-    '9220': -1.0  # Provision of loans to enterprises/institutions (high risk of inefficient fund allocation or subsidizing loss-making municipal enterprises)
+    '1184': 1.0,  
+    '7413': 0.5,  
+    '1021': 0.0,  
+    '1091': 0.0,  
+    '2010': 0.0,  
+    '0160': 0.0,  
+    '8600': -0.5, 
+    '7692': -1.0, 
+    '9220': -1.0  
 }
 
 EXPERT_WEIGHTS = {
@@ -36,13 +36,13 @@ EXPERT_WEIGHTS = {
 }
 
 def get_zone(score):
-    if score >= 30: return "ЗЕЛЕНА (Автономні / Інвестори)"
-    elif score >= -10: return "ЖОВТА (Транзитні / Стагнація)"
-    else: return "ЧЕРВОНА (Банкрути / Реципієнти)"
+    if score >= 30: return "GREEN (Autonomous / Investors)"
+    elif score >= -10: return "YELLOW (Transit / Stagnation)"
+    else: return "RED (Bankrupts / Recipients)"
 
-print(f"\n{'='*80}")
-print(f"РОЗРАХУНОК ФІНАНСОВОГО ЗДОРОВ'Я ТА ТОП-ГРОМАД (Рівень: {LEVEL.upper()})")
-print(f"{'='*80}")
+print("-" * 80)
+print(f"FINANCIAL HEALTH CALCULATION AND TOP COMMUNITIES (Level: {LEVEL.upper()})")
+print("-" * 80)
 
 comp_dir = os.path.join(DATA_DIR, f"{N_COMP}_comp")
 
@@ -96,7 +96,7 @@ for cat_key in ['income', 'prog']:
             
             members_data.append({
                 'cluster': cluster_id,
-                'name': info.get('name', f'Громада {code}'),
+                'name': info.get('name', f'Community {code}'),
                 'distance': distance
             })
             
@@ -122,9 +122,9 @@ for cat_key in ['income', 'prog']:
         
     ratings_df = ratings_df.sort_values('Score_100', ascending=False)
     
-    print(f"\nКАТЕГОРІЯ: {cat_key.upper()} (Рік: {latest_year})")
+    print(f"\nCATEGORY: {cat_key.upper()} (Year: {latest_year})")
     print("-" * 80)
-    print(f"{'Кл.':<5} | {'Рейтинг':<8} | {'Діагноз / Зона'}")
+    print(f"{'Cl.':<5} | {'Rating':<8} | {'Diagnosis / Zone'}")
     print("-" * 80)
     
     for _, row in ratings_df.iterrows():
@@ -140,7 +140,7 @@ for cat_key in ['income', 'prog']:
             names_list = [f"{r['name']} ({r['distance']:.2f})" for _, r in top_3.iterrows()]
             
             if names_list:
-                print(f"       Еталони: {', '.join(names_list)}")
+                print(f"       References: {', '.join(names_list)}")
         print("-" * 80)
 
-print(f"\n{'='*80}")
+print("-" * 80)
