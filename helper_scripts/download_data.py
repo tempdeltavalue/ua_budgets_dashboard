@@ -64,7 +64,7 @@ class OpenBudgetClient:
             'Authority': 'api.openbudget.gov.ua',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
         }
 
         self.session = requests.Session()
@@ -131,10 +131,10 @@ class OpenBudgetClient:
             f.write(text_data)
 
     def process_budget(self, budget_code, budget_name, target_folder):
-        print(f"\n{'='*70}")
-        print(f"PROCESSING: {budget_name} (Код: {budget_code})")
+        print("-" * 70)
+        print(f"PROCESSING: {budget_name} (Code: {budget_code})")
         print(f"Target: {target_folder}")
-        print(f"{'='*70}")
+        print("-" * 70)
 
         for classification in self.CLASSIFICATION_TYPES:
             for item in self.BUDGET_ITEMS:
@@ -144,10 +144,7 @@ class OpenBudgetClient:
                 for year in self.FETCH_YEARS:
                     full_path = self.get_file_path(target_folder, item, year, classification)
 
-                    # === ОСЬ ТУТ ВІДБУВАЄТЬСЯ СКІП ВЖЕ СКАЧАНОГО ===
                     if os.path.exists(full_path):
-                        # Можеш розкоментувати прінт нижче, якщо хочеш бачити, як він скіпає
-                        # print(f"   Skipping (already exists): {item} {year}")
                         continue
 
                     data = self.fetch_data(budget_code, year, item, classification)
@@ -157,42 +154,35 @@ class OpenBudgetClient:
                     
                     time.sleep(0.5) 
 
-# === ЧИТАННЯ EXCEL ФАЙЛУ ДЛЯ ВСІЄЇ УКРАЇНИ ===
 def load_all_budgets(file_path):
-    print(f"📖 Читаю довідник: {file_path}...")
+    print(f"Reading directory: {file_path}...")
     try:
         df = pd.read_excel(file_path, header=8)
         df = df.dropna(subset=['Код бюджету 4'])
         
-        # Гарантуємо, що код це рядок (string)
         df['Код бюджету 4'] = df['Код бюджету 4'].astype(str).str.strip()
         
         budgets = {}
         for _, row in df.iterrows():
             code = row['Код бюджету 4']
             
-            # Перевіряємо перші 2 цифри (код області)
             if len(code) >= 2:
                 region_prefix = code[:2]
                 
-                # Якщо це будь-яка область України
                 if region_prefix in ALL_OBLASTS:
                     budget_type = str(row['Ознака бюджету 3']).strip()
                     
-                    # Відбираємо тільки Обласні, Районні та Громади
                     if budget_type in ['o', 'r', 'gs', 'gss', 'gm']:
                         name = str(row['Найменування бюджету']).strip()
                         safe_name = re.sub(r'[\\/*?:"<>|]', "", name) 
                         
-                        # Визначаємо ієрархічну папку
                         if budget_type == 'o':
-                            group_folder = "1_Обласні_бюджети"
+                            group_folder = "1_Regional_Budgets"
                         elif budget_type == 'r':
-                            group_folder = "2_Районні_бюджети"
+                            group_folder = "2_District_Budgets"
                         else:
-                            group_folder = "3_Бюджети_громад"
+                            group_folder = "3_Community_Budgets"
                             
-                        # Отримуємо назву області англійською для створення папки
                         region_folder_name = ALL_OBLASTS[region_prefix]
                             
                         budgets[safe_name] = {
@@ -201,11 +191,11 @@ def load_all_budgets(file_path):
                             'region_folder': region_folder_name
                         }
             
-        print(f"✅ Знайдено {len(budgets)} унікальних бюджетів по всій Україні.")
+        print(f"Found {len(budgets)} unique budgets across Ukraine.")
         return budgets
         
     except Exception as e:
-        print(f"❌ Помилка обробки файлу: {e}")
+        print(f"Processing error: {e}")
         return {}
 
 if __name__ == "__main__":
@@ -217,11 +207,10 @@ if __name__ == "__main__":
     TARGET_BUDGETS = load_all_budgets(EXCEL_FILE_PATH)
 
     if not TARGET_BUDGETS:
-        print("Зупинка: не вдалося знайти бюджети для завантаження. Перевір назву файлу.")
+        print("Halt: No budgets found for download. Check filename.")
         exit()
 
     for name, data in TARGET_BUDGETS.items():
-        # Формуємо шлях: b_data / region_name / 3_Бюджети_громад / Назва_Код
         code = data['code']
         group = data['group_folder']
         region_dir = data['region_folder']
@@ -231,9 +220,9 @@ if __name__ == "__main__":
         try:
             client.process_budget(code, name, target_path)
         except KeyboardInterrupt:
-            print("\n Зупинено користувачем.")
+            print("\n Stopped by user.")
             break
         except Exception as e:
             print(f"CRITICAL ERROR processing {name}: {e}")
 
-    print("\nВсі дані по Україні успішно завантажені або оновлені!")
+    print("\nAll data successfully downloaded or updated!")

@@ -7,14 +7,13 @@ import os
 import warnings
 import json
 from fastapi.staticfiles import StaticFiles
-from utils import load_and_prepare_data
+from helper_scripts.utils import load_and_prepare_data
 from fastapi.middleware.gzip import GZipMiddleware
 
 warnings.filterwarnings("ignore")
 pd.set_option('future.no_silent_downcasting', True)
 
 base_data_path = "viz_dashboard_data2"
-# Додаємо правильний шлях до нової папки (всередині viz_dashboard_data2)
 PCA_BASE_DIR = os.path.join(base_data_path, "pca_t_data")
 
 server_state = {
@@ -25,7 +24,6 @@ server_state = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global server_state
-    # Завантажуємо в пам'ять лише для /api/compare_data (якщо utils.py це робить)
     server_state = load_and_prepare_data(server_state, CACHE_DIR=base_data_path)
     yield
 
@@ -222,6 +220,23 @@ async def get_compare_data(items: str):
                     
     return JSONResponse(content={"features": selected_features})
 
+@app.get("/api/translations/{filename}")
+async def get_translation(filename: str):
+    allowed_files = [
+        "economic.json", "functional.json", "geography.json", 
+        "groups.json", "incomes.json", "programmatic.json", "other.json", "ui_elements.json"
+    ]
+    
+    if filename not in allowed_files:
+        return JSONResponse(content={"error": "Invalid translation file requested"}, status_code=403)
+        
+    file_path = os.path.join("web_ui", "eng_names", filename)
+    
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="application/json")
+    else:
+        return JSONResponse(content={"error": f"Translation file {filename} not found"}, status_code=404)
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

@@ -13,11 +13,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 warnings.filterwarnings("ignore")
 pd.set_option('future.no_silent_downcasting', True)
 
-# --- 1. НАЛАШТУВАННЯ ---
 BASE_DIR = 'b_data'
 OUTPUT_BASE_DIR = 'pca_t_data'
 
-# Створюємо базову структуру папок
 for n_comp in [3, 10]:
     os.makedirs(os.path.join(OUTPUT_BASE_DIR, f"{n_comp}_comp", "trajectories"), exist_ok=True)
     os.makedirs(os.path.join(OUTPUT_BASE_DIR, f"{n_comp}_comp", "errors"), exist_ok=True)
@@ -35,13 +33,12 @@ REGION_MAP = {
 }
 
 CATEGORIES = {
-    'income': {'folder': 'empty_incomes', 'suffix': 'income', 'label': 'ДОХОДИ (Власні надходження)'},
-    'prog': {'folder': 'program_expenses', 'suffix': 'prog', 'label': 'ВИДАТКИ (КПКВК - Програмні)'},
-    'econ': {'folder': 'economic_expenses', 'suffix': 'econ', 'label': 'ВИДАТКИ (КЕКВ - Економічні)'},
-    'func': {'folder': 'functional_expenses', 'suffix': 'func', 'label': 'ВИДАТКИ (ФКВК - Функціональні)'}
+    'income': {'folder': 'empty_incomes', 'suffix': 'income', 'label': 'REVENUES (Own receipts)'},
+    'prog': {'folder': 'program_expenses', 'suffix': 'prog', 'label': 'EXPENSES (Programmatic)'},
+    'econ': {'folder': 'economic_expenses', 'suffix': 'econ', 'label': 'EXPENSES (Economic)'},
+    'func': {'folder': 'functional_expenses', 'suffix': 'func', 'label': 'EXPENSES (Functional)'}
 }
 
-# --- ФУНКЦІЯ-РОБІТНИК ДЛЯ МУЛЬТИПРОЦЕСИНГУ ---
 def process_single_file(task):
     file_path, name_part, code, root_path, cat_key = task
     try:
@@ -105,14 +102,11 @@ def process_single_file(task):
     except Exception:
         return None
 
-# ==============================================================================
-# 🚀 ОСНОВНИЙ БЛОК
-# ==============================================================================
 if __name__ == '__main__':
     global_start_time = time.time()
-    print(f"\n{'='*70}")
-    print(f"🚀 ПОЧАТОК ГЛОБАЛЬНОГО РОЗРАХУНКУ")
-    print(f"{'='*70}")
+    print("-" * 70)
+    print("STARTING GLOBAL CALCULATION")
+    print("-" * 70)
 
     for cat_key, cat_info in CATEGORIES.items():
         cat_start_time = time.time()
@@ -121,11 +115,11 @@ if __name__ == '__main__':
         file_suffix = cat_info['suffix']
         label = cat_info['label']
 
-        print(f"\n{'='*50}")
-        print(f"🔄 ОБРОБКА КАТЕГОРІЇ: {label}")
-        print(f"{'='*50}")
+        print("-" * 50)
+        print(f"PROCESSING CATEGORY: {label}")
+        print("-" * 50)
 
-        print(f"📁 [1/4] Читання файлів з '{folder_name}'...")
+        print(f"[1/4] Reading files from '{folder_name}'...")
         tasks = []
         for root, dirs, files in os.walk(BASE_DIR):
             if folder_name in root:
@@ -136,7 +130,7 @@ if __name__ == '__main__':
 
         total_files = len(tasks)
         if total_files == 0:
-            print(f"⚠️ Файлів для {cat_key} не знайдено.")
+            print(f"No files found for {cat_key}.")
             continue
 
         all_records = []
@@ -149,7 +143,7 @@ if __name__ == '__main__':
             for future in as_completed(futures):
                 processed += 1
                 if processed % 200 == 0:
-                    print(f"   ... оброблено {processed}/{total_files} файлів")
+                    print(f"   ... processed {processed}/{total_files} files")
                     
                 res = future.result()
                 if res is not None:
@@ -161,19 +155,18 @@ if __name__ == '__main__':
         if not all_records:
             continue
 
-        print("🧹 Агрегація даних...")
+        print("Aggregating data...")
         full_df = pd.concat(all_records, ignore_index=True)
         full_df = full_df.groupby(['BUDGET_CODE', 'REP_PERIOD', 'LEVEL', 'COD'], as_index=False)['AMT'].sum()
         full_df['Date'] = pd.to_datetime(full_df['REP_PERIOD'], format='%m.%Y', errors='coerce')
         full_df = full_df.dropna(subset=['Date', 'BUDGET_CODE'])
 
-        # --- РОЗРАХУНОК ДЛЯ РІЗНИХ РОЗМІРНОСТЕЙ ---
         for n_comp in [3, 10]:
-            print(f"🧮 [3/4] Розрахунок PCA та похибок ({n_comp} компонент)...")
+            print(f"[3/4] Calculating PCA and reconstruction errors ({n_comp} components)...")
             
             pca_results = {}
             pca_metadata = {}
-            error_results = {} # Тепер тут будуть похибки кожної громади
+            error_results = {}
 
             for current_level in ['l1', 'l2', 'l3']:
                 df_level = full_df[full_df['LEVEL'] == current_level]
@@ -199,13 +192,8 @@ if __name__ == '__main__':
                 actual_comp = min(n_comp, X_scaled.shape[1], X_scaled.shape[0])
                 pca = PCA(n_components=actual_comp)
                 
-                # Пряме перетворення (Стиснення)
                 components = pca.fit_transform(X_scaled)
-                
-                # Зворотне перетворення (Розпакування)
                 X_reconstructed = pca.inverse_transform(components)
-                
-                # Обчислення Mean Squared Error (MSE) для кожного рядка (кожної громади в кожен місяць)
                 reconstruction_errors = np.mean((X_scaled - X_reconstructed) ** 2, axis=1)
 
                 features = smoothed_data.columns
@@ -216,26 +204,25 @@ if __name__ == '__main__':
                 for i, pc in enumerate(pc_names):
                     weights_df = pd.DataFrame({'code': features, 'weight': loadings[i]})
                     top_features = weights_df.reindex(weights_df['weight'].abs().sort_values(ascending=False).index).head(5)
-                    feature_list = [{"code": row['code'], "name": GLOBAL_CODE_NAMES.get(row['code'], f"Стаття {row['code']}"), "weight": round(row['weight'], 4), "direction": "positive" if row['weight'] > 0 else "negative"} for _, row in top_features.iterrows()]
+                    feature_list = [{"code": row['code'], "name": GLOBAL_CODE_NAMES.get(row['code'], f"Item {row['code']}"), "weight": round(row['weight'], 4), "direction": "positive" if row['weight'] > 0 else "negative"} for _, row in top_features.iterrows()]
                     level_metadata[pc] = feature_list
                 pca_metadata[current_level] = level_metadata
 
                 pca_df = pd.DataFrame(data=components, columns=pc_names, index=smoothed_data.index).reset_index()
                 pca_df['Budget_Size'] = smoothed_size.values
                 pca_df['Date_Str'] = pca_df['Date'].dt.strftime('%m.%Y')
-                pca_df['Recon_Error'] = reconstruction_errors # Додаємо похибку до датафрейму
+                pca_df['Recon_Error'] = reconstruction_errors
 
                 error_results[current_level] = {}
 
                 for code, group in pca_df.groupby('BUDGET_CODE'):
                     group = group.sort_values('Date')
                     
-                    # 1. Формуємо дані для ТРАЄКТОРІЙ (без змін)
                     local_top_factors = []
                     for _, row in group.iterrows():
                         pt = smoothed_data.loc[(code, row['Date'])].nlargest(5)
                         f_data = [{"name": GLOBAL_CODE_NAMES.get(c, c)[:50], "share": round(v * 100, 2)} for c, v in pt.items() if v > 0.001]
-                        local_top_factors.append(f_data if f_data else [{"name": "Інше", "share": 100.0}])
+                        local_top_factors.append(f_data if f_data else [{"name": "Other", "share": 100.0}])
 
                     avg_raw = smoothed_data.loc[code].mean().nlargest(5)
                     overall_top_5 = [{"name": GLOBAL_CODE_NAMES.get(c, c)[:50], "share": round(v * 100, 2)} for c, v in avg_raw.items() if v > 0.001]
@@ -249,14 +236,13 @@ if __name__ == '__main__':
                     
                     pca_results[code] = trajectory_data
                     
-                    # 2. Формуємо дані виключно для ПОХИБОК
                     error_results[current_level][code] = {
                         "name": budget_names.get(code, "Unknown"),
                         "dates": group['Date_Str'].tolist(),
                         "error": group['Recon_Error'].round(4).tolist()
                     }
 
-            print(f"💾 [4/4] Збереження файлів для {n_comp} компонент...")
+            print(f"[4/4] Saving output files for {n_comp} components...")
             
             traj_path = os.path.join(OUTPUT_BASE_DIR, f"{n_comp}_comp", "trajectories", f"traj_{file_suffix}.json")
             err_path = os.path.join(OUTPUT_BASE_DIR, f"{n_comp}_comp", "errors", f"error_{file_suffix}.json")
@@ -267,6 +253,7 @@ if __name__ == '__main__':
             with open(err_path, 'w', encoding='utf-8') as f:
                 json.dump(error_results, f, ensure_ascii=False)
 
-        print(f"⏱️ Категорію '{cat_key}' опрацьовано за {(time.time() - cat_start_time)/60:.1f} хв.")
+        print(f"Category '{cat_key}' processed in {(time.time() - cat_start_time)/60:.1f} min.")
 
-    print(f"\n🏆 ВЕСЬ ЦИКЛ ЗАВЕРШЕНО ЗА {(time.time() - global_start_time)/60:.1f} хв.")
+    print("-" * 70)
+    print(f"GLOBAL CYCLE COMPLETED IN {(time.time() - global_start_time)/60:.1f} min.")
