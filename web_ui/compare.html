@@ -2,68 +2,185 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Детальний Аналіз</title>
+    <title>Detailed Analysis</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: #0b0b0b; color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
         #header { padding: 20px 30px; border-bottom: 1px solid #333; display: flex; align-items: center; background: #111; z-index: 10; }
-        
-        /* Кнопка назад тепер закриває Iframe */
         .btn-back { background: #333; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-right: 30px;}
         .btn-back:hover { background: #555; }
-        
         #loading { position: absolute; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #0b0b0b; z-index: 100; flex-direction: column;}
         .spinner { width: 50px; height: 50px; border: 5px solid rgba(0,255,136,0.3); border-top-color: #00ff88; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;}
         @keyframes spin { to { transform: rotate(360deg); } }
-
         #columns-container { display: flex; flex: 1; overflow-x: auto; padding: 20px; gap: 20px; align-items: flex-start; background: #0b0b0b;}
-        
-        /* Стовпець = Сайд-панель */
         .column { width: 500px; min-width: 500px; background: rgba(15, 15, 20, 0.97); border: 1px solid #444; border-radius: 12px; padding: 25px; box-sizing: border-box; height: 100%; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .column::-webkit-scrollbar { width: 6px; }
         .column::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
-        
         .col-title { font-size: 24px; font-weight: bold; margin: 0; color: #fff;}
         .badge { font-size: 11px; background: #333; color: #ccc; padding: 4px 8px; border-radius: 4px; font-weight: bold; letter-spacing: 1px; margin-left: 10px;}
         .col-subtitle { font-size: 14px; color: #888; margin-bottom: 25px; margin-top: 15px; line-height: 1.4;}
-        
         .chart-wrapper { height: 260px; width: 100%; background: rgba(25, 25, 30, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #333; box-sizing: border-box; margin-bottom: 20px;}
     </style>
 </head>
 <body>
     <div id="loading">
         <div class="spinner"></div>
-        <h2 style="color: #00ff88;">Побудова панелей...</h2>
+        <h2 id="loading-text" style="color: #00ff88;"></h2>
     </div>
-
     <div id="header">
-        <button class="btn-back" onclick="window.parent.closeCompareScreen()">🡠 Назад до карти</button>
+        <button class="btn-back" id="btn-back-text" onclick="window.parent.closeCompareScreen()"></button>
         <div>
-            <h2 style="margin:0; color:#fff;">Порівняння вибраних панелей</h2>
-            <div style="font-size:13px; color:#888;">Кожна колонка має власну незалежну шкалу (вісь Y)</div>
+            <h2 id="header-title" style="margin:0; color:#fff;"></h2>
+            <div id="header-subtitle" style="font-size:13px; color:#888;"></div>
         </div>
     </div>
-
     <div id="columns-container"></div>
-
     <script>
         const years = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
         const colors = ['#00ff88', '#00bfff', '#ff1744', '#ffeb3b'];
         
-        // Словник для бейджів
-        const levelNames = { 'l1': 'ОБЛАСТЬ', 'l2': 'РАЙОН', 'l3': 'ГРОМАДА' };
+        let currentLang = localStorage.getItem('currentLang') || 'uk';
+        let dataTranslations = {}; 
+        let uiTranslations = {}; 
 
-        // Читаємо буфер з пам'яті браузера
+        async function loadTranslations() {
+            const files = ['geography.json', 'incomes.json', 'programmatic.json', 'economic.json', 'functional.json', 'groups.json', 'other.json'];
+            try {
+                const ts = new Date().getTime(); 
+                const requests = files.map(file => fetch(`/api/translations/${file}?t=${ts}`).then(res => res.ok ? res.json() : {}));
+                const results = await Promise.all(requests);
+                results.forEach(data => { dataTranslations = { ...dataTranslations, ...data }; });
+                const uiRes = await fetch(`/api/translations/ui_elements.json?t=${ts}`);
+                if (uiRes.ok) uiTranslations = await uiRes.json();
+            } catch (e) { }
+        }
+
+        function cleanEngText(text, code) {
+            if (!text) return '';
+            let clean = text.trim();
+            if (code && clean.startsWith(code + " - ")) clean = clean.substring(code.length + 3).trim();
+            return clean;
+        }
+
+        function hasCyrillic(str) { return /[А-Яа-яЄєІіЇїҐґ]/.test(str); }
+
+        function t(stringObj) {
+            if (!stringObj || typeof stringObj !== 'string') return stringObj;
+            stringObj = stringObj.trim(); 
+            
+            if (currentLang === 'uk') {
+                if (uiTranslations['uk'] && uiTranslations['uk'][stringObj]) return uiTranslations['uk'][stringObj];
+                return stringObj;
+            }
+
+            if (uiTranslations['en'] && uiTranslations['en'][stringObj]) return uiTranslations['en'][stringObj];
+            
+            if (uiTranslations['uk']) {
+                const reverseKey = Object.keys(uiTranslations['uk']).find(key => uiTranslations['uk'][key] === stringObj);
+                if (reverseKey) {
+                    if (uiTranslations['en'] && uiTranslations['en'][reverseKey]) return uiTranslations['en'][reverseKey];
+                    return reverseKey;
+                }
+            }
+
+            const normalizeStr = (str) => {
+                if (!str) return '';
+                return str.toLowerCase().replace(/['"`’]/g, '').replace(/[\u00A0\s]+/g, ' ').replace(/[.,\-_]/g, '').trim();
+            };
+
+            const normStringObj = normalizeStr(stringObj);
+
+            if (stringObj.includes('Деталізація:')) {
+                let parts = stringObj.split(':');
+                let content = parts[1].trim(); 
+                let categoryPart = "";
+                if (content.includes('(') && content.includes(')')) {
+                    let start = content.indexOf('(');
+                    categoryPart = content.substring(start);
+                    content = content.substring(0, start).trim();
+                }
+                
+                let translatedContent = content;
+                if (uiTranslations['uk']) {
+                    const revKey = Object.keys(uiTranslations['uk']).find(key => uiTranslations['uk'][key] === content);
+                    if (revKey) {
+                        translatedContent = uiTranslations['en'][revKey] || revKey;
+                    } else if (content.includes('знак')) {
+                        let num = content.split(' ')[0];
+                        translatedContent = num === "1" ? "1 digit" : num + " digits";
+                    }
+                }
+
+                let categoryName = categoryPart.replace('(', '').replace(')', '').trim();
+                let translatedCategory = categoryName;
+                if (uiTranslations['uk']) {
+                    const revCatKey = Object.keys(uiTranslations['uk']).find(key => uiTranslations['uk'][key] === categoryName);
+                    if (revCatKey) translatedCategory = uiTranslations['en'][revCatKey] || revCatKey;
+                }
+
+                return `Detailing: ${translatedContent} (${translatedCategory})`;
+            }
+
+            const exactMatchKey = Object.keys(dataTranslations).find(k => normalizeStr(k) === normStringObj);
+            if (exactMatchKey) {
+                const entry = dataTranslations[exactMatchKey];
+                if (entry.eng && !hasCyrillic(entry.eng)) {
+                    let engText = entry.eng.trim();
+                    const dashIdx = stringObj.indexOf(' - ');
+                    if (dashIdx !== -1) {
+                        const codePart = stringObj.substring(0, dashIdx).trim();
+                        return `${codePart} - ${cleanEngText(engText, codePart)}`;
+                    }
+                    return cleanEngText(engText, entry.code);
+                }
+            }
+
+            const dashIdx = stringObj.indexOf(' - ');
+            if (dashIdx !== -1) {
+                const codePart = stringObj.substring(0, dashIdx).trim();
+                const namePart = stringObj.substring(dashIdx + 3).trim();
+                const normNamePart = normalizeStr(namePart);
+                if (!isNaN(codePart.replace(/\s/g, ''))) {
+                    const matchesByCode = Object.values(dataTranslations).filter(item => item.code == codePart);
+                    if (matchesByCode.length > 0) {
+                        const bestMatch = matchesByCode.find(item => {
+                            const normUkr = normalizeStr(item.ukr);
+                            return item.eng && !hasCyrillic(item.eng) && normUkr && (normUkr.includes(normNamePart) || normNamePart.includes(normUkr));
+                        });
+                        if (bestMatch) return `${codePart} - ${cleanEngText(bestMatch.eng, codePart)}`;
+                    }
+                }
+            }
+
+            if (stringObj.includes('Група')) return stringObj.replace('Група', 'Group');
+            if (stringObj.includes('Групи')) return stringObj.replace('Групи', 'Groups');
+
+            return stringObj;
+        }
+
+        function updateStaticTexts() {
+            document.getElementById('loading-text').innerText = t('connecting');
+            document.getElementById('btn-back-text').innerText = t('return_map');
+            document.getElementById('header-title').innerText = t('analytical_buffer');
+            
+            if (currentLang === 'uk') {
+                document.getElementById('header-subtitle').innerText = "Кожна колонка має власну незалежну шкалу (вісь Y)";
+            } else {
+                document.getElementById('header-subtitle').innerText = "Each column has its own independent scale (Y-axis)";
+            }
+        }
+
         let buffer = JSON.parse(localStorage.getItem('compareBuffer')) || [];
         let hierarchy = {};
 
         async function initCompare() {
+            await loadTranslations();
+            updateStaticTexts();
+
             const container = document.getElementById('columns-container');
-            
             if (buffer.length === 0) {
                 document.getElementById('loading').style.display = 'none';
-                container.innerHTML = '<h2 style="color:#666; margin: 50px;">Буфер порожній. Поверніться на карту і виберіть графіки.</h2>';
+                container.innerHTML = `<h2 style="color:#666; margin: 50px;">${t('no_saved_items')}</h2>`;
                 return;
             }
 
@@ -72,49 +189,43 @@
             let queryStr = Array.from(uniqueItems).join(',');
 
             try {
-                // Отримуємо конфіг ієрархії ТА дані об'єктів
                 const [resConfig, resData] = await Promise.all([
                     fetch('/api/config'),
                     fetch(`/api/compare_data?items=${queryStr}`)
                 ]);
-                
                 hierarchy = await resConfig.json();
                 const data = await resData.json();
-                
                 document.getElementById('loading').style.display = 'none';
-
                 const featuresMap = {};
                 data.features.forEach(f => {
                     let lvl = f.properties._level;
                     let code = f.properties.BUDGET_CODE;
                     featuresMap[`${lvl}:${code}`] = f;
                 });
-
-                // Малюємо колонки для кожного запису
                 buffer.forEach((item, index) => {
                     let feature = featuresMap[`${item.level}:${item.code}`];
-                    if (feature) {
-                        createColumn(container, item, feature, colors[index % colors.length]);
-                    }
+                    if (feature) createColumn(container, item, feature, colors[index % colors.length]);
                 });
-
             } catch (e) {
                 document.getElementById('loading').style.display = 'none';
-                container.innerHTML = `<h2 style="color:red; margin:50px;">Помилка завантаження: ${e.message}</h2>`;
+                container.innerHTML = `<h2 style="color:red; margin:50px;">Error: ${e.message}</h2>`;
             }
         }
 
         function createColumn(container, item, feature, color) {
             const col = document.createElement('div');
             col.className = 'column';
+            const translatedTitle = t(feature.properties.display_name || item.regionName);
+            const translatedSubtitle = t(item.metricDesc);
             
-            // МАЛЮЄМО БЕЙДЖ (Область, Район або Громада)
+            const badgeLabel = t(item.level === 'l1' ? 'Regions (Oblasts)' : (item.level === 'l2' ? 'Districts (Raions)' : 'Communities (Hromadas)'));
+
             col.innerHTML = `
                 <div style="border-bottom: 2px solid ${color}; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <h3 class="col-title">${item.regionName}</h3>
-                    <span class="badge">${levelNames[item.level]}</span>
+                    <h3 class="col-title">${translatedTitle}</h3>
+                    <span class="badge">${badgeLabel}</span>
                 </div>
-                <div class="col-subtitle">${item.metricDesc}</div>
+                <div class="col-subtitle">${translatedSubtitle}</div>
                 <div id="chart-container-${item.id}" style="display: flex; flex-direction: column;"></div>
             `;
             container.appendChild(col);
@@ -123,9 +234,9 @@
             const p = feature.properties;
 
             if (item.main === 'BAL') {
-                createSingleChart(chartContainer, 'Баланс (Профіцит/Дефіцит, Млн ₴)', years.map(y => (parseFloat(p['BAL_' + y]) || 0) / 1e6), '#00ff88', 'rgba(0,255,136,0.1)', true);
-                createSingleChart(chartContainer, 'Власні Доходи (Млн ₴)', years.map(y => (parseFloat(p['TOT_INC_' + y]) || 0) / 1e6), '#00bfff', 'transparent', false);
-                createSingleChart(chartContainer, 'Загальні Видатки (Млн ₴)', years.map(y => (parseFloat(p['TOT_EXP_' + y]) || 0) / 1e6), '#ff1744', 'transparent', false);
+                createSingleChart(chartContainer, t('surplus') + '/' + t('deficit') + ' (Mln ₴)', years.map(y => (parseFloat(p['BAL_' + y]) || 0) / 1e6), '#00ff88', 'rgba(0,255,136,0.1)', true);
+                createSingleChart(chartContainer, t('Own Revenues') + ' (Mln ₴)', years.map(y => (parseFloat(p['TOT_INC_' + y]) || 0) / 1e6), '#00bfff', 'transparent', false);
+                createSingleChart(chartContainer, t('Total Balance') + ' (Exp, Mln ₴)', years.map(y => (parseFloat(p['TOT_EXP_' + y]) || 0) / 1e6), '#ff1744', 'transparent', false);
             } else {
                 let codesObj = {};
                 years.forEach(y => { 
@@ -133,23 +244,20 @@
                         Object.assign(codesObj, hierarchy[y][item.level][item.main][item.detail]);
                     }
                 });
-                
                 const codes = Object.keys(codesObj);
                 const getCol = (i, total) => `hsl(${(i * 360) / Math.max(total, 1)}, 80%, 65%)`;
                 let drawnCount = 0;
-
                 codes.forEach((code, i) => {
                     let rawData = years.map(y => (parseFloat(p[item.main + '_' + code + '_' + y]) || 0) / 1e6);
                     if (rawData.some(v => v > 0)) {
-                        let labelText = codesObj[code]; 
+                        let labelText = t(codesObj[code]); 
                         if(labelText.length > 70) labelText = labelText.substring(0, 70) + '...';
                         createSingleChart(chartContainer, labelText, rawData, getCol(i, codes.length), 'transparent', false);
                         drawnCount++;
                     }
                 });
-
                 if (drawnCount === 0) {
-                    chartContainer.innerHTML = '<div style="color:#888; text-align:center; padding:30px; font-size:14px;">На жаль, по цій категорії немає даних.</div>';
+                    chartContainer.innerHTML = `<div style="color:#888; text-align:center; padding:30px; font-size:14px;">${t('no_saved_items')}</div>`;
                 }
             }
         }
@@ -160,7 +268,6 @@
             const canvas = document.createElement('canvas'); 
             wrapper.appendChild(canvas); 
             container.appendChild(wrapper);
-            
             new Chart(canvas.getContext('2d'), {
                 type: 'line',
                 data: { labels: years, datasets: [{ label: title, data: dataArray, borderColor: borderColor, backgroundColor: backgroundColor, fill: isFill, borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#222', tension: 0.3 }] },
@@ -172,6 +279,13 @@
                 }
             });
         }
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'currentLang') {
+                currentLang = e.newValue;
+                location.reload();
+            }
+        });
 
         initCompare();
     </script>

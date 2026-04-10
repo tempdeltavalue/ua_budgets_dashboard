@@ -8,8 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href='https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css' rel='stylesheet' />
     <style>
-      /* --- КНОПКИ РЕЖИМУ ПРЕЗЕНТАЦІЇ --- */
-/* --- КНОПКА РЕЖИМУ ПРЕЗЕНТАЦІЇ (ПРАВИЙ КУТ) --- */
+
       #btn-zen-mode { 
           position: absolute; 
           bottom: 200px; /* Третій поверх: над Legacy Dashboard */
@@ -31,8 +30,77 @@
           border-color: #00ff88; 
       }
     
-      #btn-exit-zen { display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(255, 23, 68, 0.9); color: white; border: 1px solid #ff1744; padding: 10px 25px; border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px); transition: 0.2s; }
-      #btn-exit-zen:hover { background: #d50000; padding: 10px 35px; }
+    #btn-exit-zen { display: none; position: absolute; top: 20px; left: 20px; z-index: 9999; background: rgba(120, 94, 99, 0.9); color: white; border: 1px solid #906b72; padding: 10px 25px; border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px); transition: 0.2s; }
+    #btn-exit-zen:hover { background: #985b5b; padding: 10px 35px; }
+
+      /* --- ВИБІР МОВИ (ПРАВИЙ КУТ, НАД ZEN MODE) --- */
+    #language-switcher {
+          position: absolute;
+          bottom: 260px; /* Четвертий поверх */
+          right: 20px;
+          z-index: 10;
+          background: rgba(30, 30, 30, 0.95);
+          border: 1px solid #444;
+          padding: 8px; /* Прибрали зайвий відступ, бо тексту більше немає */
+          border-radius: 12px;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+          backdrop-filter: blur(5px);
+          display: flex;
+          align-items: center;
+      }
+      .segmented-control {
+          position: relative;
+          display: inline-flex;
+          width: 120px; /* Зробили ширшим */
+          height: 38px; /* Зробили вищим */
+          background-color: #222; /* Темніший фон для контрасту з повзунком */
+          border-radius: 38px;
+          border: 1px solid #333;
+          cursor: pointer;
+          transition: 0.4s;
+          box-sizing: border-box;
+          overflow: hidden;
+      }
+      .segmented-control input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+          position: absolute;
+      }
+      .segmented-control .option {
+          flex: 1;
+          text-align: center;
+          font-size: 13px; /* Збільшили текст */
+          color: #888; /* Світліший сірий для неактивного */
+          font-weight: bold;
+          z-index: 3; /* ТЕКСТ ТЕПЕР ПОВЕРХ ПОВЗУНКА */
+          line-height: 36px; 
+          transition: color 0.3s;
+          pointer-events: none; /* Щоб клік проходив на весь label */
+      }
+      .control-handle {
+          position: absolute;
+          width: 50%;
+          height: 100%;
+          background-color: #4a4a4a; /* Світліший сірий повзунок */
+          border-radius: 38px;
+          top: 0;
+          left: 0;
+          z-index: 2; /* ПОВЗУНОК ТЕПЕР ПІД ТЕКСТОМ */
+          transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+          border: 1px solid #666;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+          box-sizing: border-box;
+      }
+
+      /* Логіка кольорів і руху */
+      .segmented-control input:not(:checked) ~ .control-handle { transform: translateX(0); }
+      .segmented-control input:not(:checked) ~ .option.ua { color: #ffffff; text-shadow: 0 0 5px rgba(255,255,255,0.4); } /* Яскраво-білий */
+      .segmented-control input:not(:checked) ~ .option.en { color: #777; }
+
+      .segmented-control input:checked ~ .control-handle { transform: translateX(100%); }
+      .segmented-control input:checked ~ .option.ua { color: #777; }
+      .segmented-control input:checked ~ .option.en { color: #ffffff; text-shadow: 0 0 5px rgba(255,255,255,0.4); } /* Яскраво-білий */
 
       /* --- МАГІЯ ЗНИКНЕННЯ (ZEN MODE) --- */
       body.zen-mode #btn-author,
@@ -44,7 +112,8 @@
       body.zen-mode label,
       body.zen-mode #data-controls,
       body.zen-mode #index-controls,
-      body.zen-mode #btn-zen-mode {
+      body.zen-mode #btn-zen-mode,
+      body.zen-mode #language-switcher { /* Приховування мови */
           display: none !important;
       }
 
@@ -53,7 +122,8 @@
           border: none !important;
           box-shadow: none !important;
           backdrop-filter: none !important;
-          pointer-events: none; /* Карта клікається крізь невидиму панель */
+          pointer-events: none; 
+          overflow: visible !important; 
       }
 
       body.zen-mode .legend {
@@ -184,20 +254,20 @@
     </style>
   </head>
   <body>
-    <button id="btn-exit-zen" onclick="toggleZenMode()">✖ Вийти з режиму презентації (ESC)</button>
+    <button id="btn-exit-zen" onclick="toggleZenMode()" data-i18n="exit_zen">✖ Вийти з режиму презентації (ESC)</button>
 
     <div id="loading-screen">
         <div id="progress-text" style="color: #fff; font-size: 28px; font-weight: bold; margin-top: 10px;">0%</div>
         <div style="width: 280px; height: 6px; background: #222; border-radius: 4px; margin-top: 15px; overflow: hidden; border: 1px solid #444;">
             <div id="progress-bar" style="width: 0%; height: 100%; background: #00ff88; transition: width 0.4s ease-out; box-shadow: 0 0 10px rgba(0,255,136,0.6);"></div>
         </div>
-        <div id="loading-details" style="color: #888; font-size: 13px; margin-top: 12px; font-family: monospace;">Connecting to server...</div>
+        <div id="loading-details" style="color: #888; font-size: 13px; margin-top: 12px; font-family: monospace;" data-i18n="connecting">Connecting to server...</div>
     </div>
 
     <div id="author-modal" class="modal-overlay" onclick="if(event.target === this) closeAuthorModal()">
         <div class="modal-content">
             <button class="modal-close" onclick="closeAuthorModal()">×</button>
-            <h3>Authors</h3>
+            <h3 data-i18n="authors">Authors</h3>
             
             <a href="https://github.com/tempdeltavalue" target="_blank" class="github-btn">
                 <svg height="40" width="40" viewBox="0 0 16 16" style="fill: currentColor; vertical-align: middle; margin-right: 10px;">
@@ -213,7 +283,7 @@
             </div>
 
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-                <h3 style="color: #888; margin-bottom: 15px;">THANKS TO:</h3>
+                <h3 style="color: #888; margin-bottom: 15px;" data-i18n="thanks">THANKS TO:</h3>
                 <a href="https://openbudget.gov.ua/" target="_blank" class="logo-link" style="margin-top: 0;">
                     <img src="https://openbudget.gov.ua/logo_social.png" alt="Open Budget" style="height: 40px; border-radius: 6px;">
                 </a>
@@ -221,63 +291,73 @@
         </div>
     </div>
 
-    <button id="btn-close-iframe" onclick="closeCompareScreen()">🡠 Return to Main Map</button>
+    <button id="btn-close-iframe" onclick="closeCompareScreen()" data-i18n="return_map">🡠 Return to Main Map</button>
 
     <iframe id="app-iframe" src="" style="display:none; position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:3000; border:none; background:#0b0b0b;"></iframe>
-    <button id="btn-zen-mode" onclick="toggleZenMode()">Режим презентації</button>
-    <button id="btn-old-dash" onclick="openOldDashboard()">Legacy Dashboard Version</button>
-    <button id="btn-author" onclick="openAuthorModal()">About the Authors</button>
+    
+    <div id="language-switcher">
+        <label class="segmented-control">
+            <input type="checkbox" id="lang-toggle" onchange="switchLanguage()">
+            <span class="control-handle"></span>
+            <span class="option ua">UA</span>
+            <span class="option en">EN</span>
+        </label>
+    </div>
+
+    <button id="btn-zen-mode" onclick="toggleZenMode()" data-i18n="zen_mode">Режим презентації</button>
+    <button id="btn-old-dash" onclick="openOldDashboard()" data-i18n="legacy_dash">Legacy Dashboard Version</button>
+    <button id="btn-author" onclick="openAuthorModal()" data-i18n="about_authors">About the Authors</button>
 
     <div id="compare-widget">
-        <h3 style="margin-top:0; font-size:16px;">Analytical Buffer (<span id="compare-count">0</span>/4)</h3>
-        <div id="compare-list">No saved items</div>
+        <h3 style="margin-top:0; font-size:16px;"><span data-i18n="analytical_buffer">Analytical Buffer</span> (<span id="compare-count">0</span>/4)</h3>
+        <div id="compare-list" data-i18n="no_saved_items">No saved items</div>
         <div class="action-btns">
-            <button id="btn-go-compare" class="btn-action" onclick="openScreen('/compare')" disabled>📊 Charts</button>
+            <button id="btn-go-compare" class="btn-action" onclick="openScreen('/compare')" disabled>📊 <span data-i18n="charts">Charts</span></button>
             <button id="btn-go-pca" class="btn-action" onclick="openScreen('/pca_compare')" disabled>3D PCA</button>
         </div>
     </div>
 
     <div id="control-panel">
       <div id="search-container">
-          <input type="text" id="search-input" placeholder="Search community/district..." autocomplete="off">
+          <input type="text" id="search-input" placeholder="Search community/district..." data-i18n-placeholder="search_placeholder" autocomplete="off">
           <div id="search-results"></div>
       </div>
       <div id="year-display">2024</div>
       <input type="range" id="year-slider" min="2018" max="2025" step="1" value="2024">
       
-      <label>Base Mode</label>
+      <label data-i18n="base_mode">Base Mode</label>
       <select id="view-mode"></select>
 
-      <label>Administrative Level</label>
+      <label data-i18n="admin_level">Administrative Level</label>
       <select id="level-switcher"></select>
 
       <div id="data-controls">
-          <label>1. Category</label>
+          <label data-i18n="category">1. Category</label>
           <select id="main-metric"></select>
           
-          <label id="lbl-det">2. Level of Detail</label>
+          <label id="lbl-det" data-i18n="detail_level">2. Level of Detail</label>
           <select id="detail-lvl"></select>
           
-          <label id="lbl-sub">3. Select item on map</label>
+          <label id="lbl-sub" data-i18n="select_item">3. Select item on map</label>
           <select id="sub-metric"></select>
       </div>
 
       <div id="index-controls" style="display:none;">
-          <label>Analytical Index & Accuracy</label>
+          <label data-i18n="analytical_index">Analytical Index & Accuracy</label>
           <select id="index-metric"></select>
       </div>
 
       <div class="legend" id="legend-bal">
-        <span class="dot" style="background:#00e676"></span> Surplus<br>
-        <span class="dot" style="background:#ff1744"></span> Deficit<br>
+        <span class="dot" style="background:#00e676"></span> <span data-i18n="surplus">Surplus</span><br>
+        <span class="dot" style="background:#ff1744"></span> <span data-i18n="deficit">Deficit</span><br>
       </div>
       <div class="legend" id="legend-heat" style="display:none;">
-        <div style="margin-bottom: 8px;">Sum Intensity (Heatmap)</div>
+        <div style="margin-bottom: 8px;" data-i18n="sum_intensity">Sum Intensity (Heatmap)</div>
         <div style="height:12px; width:100%; background: linear-gradient(to right, rgb(30,10,60), rgb(120,20,100), rgb(220,60,50), rgb(255,140,0), rgb(255,255,100)); border-radius: 6px;"></div>
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-top:4px;"><span>Low</span><span>High</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-top:4px;"><span data-i18n="low">Low</span><span data-i18n="high">High</span></div>
       </div>
       <div class="legend" id="legend-cluster" style="display:none;">
-          <div style="margin-bottom: 8px;">Clustering (Color: Group, Height: Distance to Center)</div>
+          <div style="margin-bottom: 8px;" data-i18n="clustering_legend">Clustering (Color: Group, Height: Distance to Center)</div>
           <div id="legend-clusters"></div>
       </div>
     </div>
@@ -285,12 +365,24 @@
     <div id="side-panel">
         <button class="close-btn" onclick="closePanel()">×</button>
         <h2 id="sp-title">Name</h2>
-        <div id="sp-subtitle">Dynamics 2018-2025</div>
-        <button id="btn-select-compare" onclick="toggleCompareItem()">+ Save to Buffer</button>
+        <div id="sp-subtitle" data-i18n="dynamics">Dynamics 2018-2025</div>
+        <button id="btn-select-compare" onclick="toggleCompareItem()">+ <span data-i18n="save_buffer">Save to Buffer</span></button>
         <div id="charts-container"></div>
     </div>
 
     <div id="container"></div>
+    <script>
+        function switchLanguage() {
+            const isEnglish = document.getElementById('lang-toggle').checked;
+            console.log("Мова змінена. English:", isEnglish);
+            
+            // Якщо у тебе є функція для зміни мови в index.js, розкоментуй це:
+            // if (typeof window.applyLanguage === 'function') {
+            //     window.applyLanguage(isEnglish ? 'en' : 'uk');
+            // }
+        }
+    </script>
+    <script src="/static/utils/multi_lang.js"></script>
     <script src="loader.js"></script>
     <script src="index.js"></script>
 
