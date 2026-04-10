@@ -1,5 +1,5 @@
 # ua_budgets_dashboard
-[Live Interactive Dashboard](https://ua-budgets-dash.duckdns.org/)
+Live Interactive Dashboard: https://ua-budgets-dash.duckdns.org/
 
 ![Dashboard Preview](https://github.com/user-attachments/assets/65c4d01a-55ad-4cdf-a66e-7a1ffa55fc3c)
 
@@ -8,13 +8,13 @@
 ## Data Sources & Availability
 The analytical framework integrates data from three primary pillars:
 
-1. **Raw Financial Records:** Retrieved from the official [OpenBudget](https://openbudget.gov.ua/en) state portal. This is the primary source for all municipal revenue and expenditure figures.
-2. **Budget Directories:** [Classification Codes](https://mof.gov.ua/uk/dovidnyky-misc-budg) provided by the Ministry of Finance of Ukraine (used for mapping numeric codes to human-readable categories).
-3. **Geospatial Data:** [Subnational Administrative Boundaries (Admin 3)](https://data.humdata.org/dataset/cod-ab-ukr) provided by OCHA (Humanitarian Data Exchange).
+1. **Raw Financial Records:** Retrieved from the official state portal: https://openbudget.gov.ua/en. This is the primary source for all municipal revenue and expenditure figures.
+2. **Budget Directories:** Classification Codes provided by the Ministry of Finance of Ukraine: https://mof.gov.ua/uk/dovidnyky-misc-budg (used for mapping numeric codes to human-readable categories).
+3. **Geospatial Data:** Subnational Administrative Boundaries (Admin 3) provided by OCHA (Humanitarian Data Exchange): https://data.humdata.org/dataset/cod-ab-ukr.
 
 ### Experimental Dataset
-For convenience, a pre-downloaded and processed dataset is available:
-* **[Download Parquet Data (Google Drive)](https://drive.google.com/file/d/1K_g-N8xbiAkVdVhMqRYUVWksHcnjmD1-/view?usp=drive_link)**
+For convenience, a pre-downloaded and processed dataset is available via Google Drive:
+* **Download Parquet Data:** https://drive.google.com/file/d/1K_g-N8xbiAkVdVhMqRYUVWksHcnjmD1-/view?usp=drive_link
 
 > **Storage Requirement:** To run the full pipeline, raw data must be converted to `.csv`. The total dataset requires approximately **20 GB** of local storage.
 
