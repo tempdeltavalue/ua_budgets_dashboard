@@ -3,6 +3,7 @@ import numpy as np
 import json
 import os
 import xgboost as xgb
+import shap
 from sklearn.metrics import classification_report, accuracy_score
 from sklearn.preprocessing import LabelEncoder
 import matplotlib.pyplot as plt
@@ -12,21 +13,27 @@ warnings.filterwarnings('ignore')
 
 COMPONENTS = "3_comp" 
 DATA_DIR = os.path.join('pca_t_data', COMPONENTS)
-OUTPUT_METRICS_DIR = "metrics_output" 
+OUTPUT_METRICS_DIR = "metrics_output"
+SHAP_OUTPUT_DIR = os.path.join(OUTPUT_METRICS_DIR, "shap_plots")
 
 CATEGORIES = ['income', 'prog']
 FORECAST_STEP = 1 
 
 os.makedirs(OUTPUT_METRICS_DIR, exist_ok=True)
+os.makedirs(SHAP_OUTPUT_DIR, exist_ok=True)
 
 def process_category(category):
     clust_file = os.path.join(DATA_DIR, 'clusters', f"clusters_{category}.json")
     traj_file = os.path.join(DATA_DIR, 'trajectories', f"traj_{category}.json")
     
     if not os.path.exists(clust_file) or not os.path.exists(traj_file):
-        print(f"Files for {category} not found!")
+        print(f"WARNING: Files for {category} not found!")
         return
 
+    print(f"\n{'='*90}")
+    print(f"XGBoost FORECAST: {category.upper()} (Step: +{FORECAST_STEP} year(s))")
+    print(f"{'='*90}")
+    
     with open(clust_file, 'r', encoding='utf-8') as f:
         clust_data = json.load(f)
         
@@ -76,6 +83,7 @@ def process_category(category):
     yearly_accuracies = []
     cluster_metrics_train_yearly = []
     cluster_metrics_test_yearly = []
+    shap_data_collection = []
 
     available_years = sorted(ml_df['year'].unique())
     if len(available_years) < 2: return
@@ -115,8 +123,13 @@ def process_category(category):
         train_acc = accuracy_score(y_train, y_train_pred_encoded)
         test_acc = accuracy_score(y_test, y_test_pred_encoded)
         
-        print(f"Training up to {base_year-1} | FORECAST FOR {target_year} | Test Acc: {test_acc:.2%}")
+        print(f"Training up to {base_year-1} | Forecast: {target_year} | Test Acc: {test_acc:.2f}")
         
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_test)
+        class_names = [str(c) for c in le.inverse_transform(range(len(le.classes_)))]
+        shap_data_collection.append((target_year, shap_values, X_test, class_names))
+
         yearly_accuracies.append({
             'Training_Window': f"Up to {base_year-1} -> {base_year}",
             'Input_Year': base_year,
@@ -142,7 +155,7 @@ def process_category(category):
 
                 cluster_metrics_test_yearly.append({
                     'Forecast_Year': target_year,
-                    'Cluster': f"Кл. {class_label}",
+                    'Cluster': f"Cl. {class_label}",
                     'Accuracy': round(cluster_acc, 2),
                     'Precision': round(metrics['precision'], 2),
                     'Recall': round(metrics['recall'], 2),
@@ -164,13 +177,94 @@ def process_category(category):
 
                 cluster_metrics_train_yearly.append({
                     'Forecast_Year': target_year,
-                    'Cluster': f"Кл. {class_label}",
+                    'Cluster': f"Cl. {class_label}",
                     'Accuracy': round(cluster_acc_train, 2),
                     'Precision': round(metrics['precision'], 2),
                     'Recall': round(metrics['recall'], 2),
                     'F1-Score': round(metrics['f1-score'], 2)
                 })
 
+    n_plots = len(shap_data_collection)
+    if n_plots > 0:
+        fig, axes = plt.subplots(n_plots, 1, figsize=(14, 4 * n_plots))
+        if n_plots == 1:
+            axes = [axes]
+        
+        global_legend_dict = {}
+
+        for i, (year, s_vals, x_t, c_names) in enumerate(shap_data_collection):
+            ax = axes[i]
+            plt.sca(ax)
+            
+            shap.summary_plot(
+                s_vals, 
+                x_t, 
+                plot_type="bar", 
+                class_names=c_names,
+                plot_size=None,
+                show=False
+            )
+            
+            ax.set_title(f"SHAP Importance - {category.upper()} (Forecast {year})", fontsize=16, pad=15)
+            
+            if i < n_plots - 1:
+                ax.set_xlabel("")
+            
+            leg = ax.get_legend()
+            if leg:
+                for handle, label_obj in zip(leg.legend_handles, leg.get_texts()):
+                    lbl = label_obj.get_text()
+                    if lbl not in global_legend_dict:
+                        global_legend_dict[lbl] = handle
+                leg.remove()
+
+        plt.tight_layout()
+        plt.subplots_adjust(hspace=0.4, bottom=0.15)
+        
+        if global_legend_dict:
+            global_legend_labels = list(global_legend_dict.keys())
+            global_legend_handles = list(global_legend_dict.values())
+            
+            n_cols = min(len(global_legend_labels), 10)
+            fig.legend(
+                global_legend_handles, global_legend_labels, 
+                loc='lower center', 
+                ncol=n_cols, 
+                bbox_to_anchor=(0.5, 0.02),
+                fontsize=12,
+                frameon=False,
+                title="Clusters"
+            )
+            
+        plot_filename = os.path.join(SHAP_OUTPUT_DIR, f"combined_shap_bar_{category}.png")
+        plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+        plt.close()
+
+    shap_csv_data = []
+    if n_plots > 0:
+        for year, s_vals, x_t, c_names in shap_data_collection:
+            feature_names = x_t.columns.tolist()
+            
+            for class_idx, class_name in enumerate(c_names):
+                if isinstance(s_vals, list):
+                    class_shap_vals = s_vals[class_idx]
+                elif len(s_vals.shape) == 3:
+                    class_shap_vals = s_vals[:, :, class_idx]
+                else:
+                    class_shap_vals = s_vals
+                    
+                mean_abs_shap = np.abs(class_shap_vals).mean(axis=0)
+                
+                for feat_idx, feat_name in enumerate(feature_names):
+                    shap_csv_data.append({
+                        'Forecast_Year': year,
+                        'Cluster': class_name,
+                        'Feature': feat_name,
+                        'Mean_Abs_SHAP': mean_abs_shap[feat_idx]
+                    })
+        
+        df_shap_csv = pd.DataFrame(shap_csv_data)
+        df_shap_csv.to_csv(os.path.join(OUTPUT_METRICS_DIR, f'shap_values_{category}.csv'), index=False)
     if yearly_accuracies:
         pd.DataFrame(yearly_accuracies).to_csv(os.path.join(OUTPUT_METRICS_DIR, f'yearly_accuracy_{category}.csv'), index=False)
 
@@ -189,7 +283,7 @@ def process_category(category):
     save_cluster_metrics(cluster_metrics_train_yearly, 'train')
     save_cluster_metrics(cluster_metrics_test_yearly, 'test')
     
-    print(f"Saved cluster metrics (Train and Test) in: {OUTPUT_METRICS_DIR}")
+    print(f"Saved cluster metrics, combined SHAP plots, and SHAP CSVs to: {OUTPUT_METRICS_DIR}")
 
 for cat in CATEGORIES:
     process_category(cat)
