@@ -285,7 +285,6 @@ function initMap() {
 
     deckgl = new deck.DeckGL({
         container: 'container',
-        mapStyle: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',        
         initialViewState: savedView || defaultView,
         controller: true,
         getTooltip: ({object, layer}) => {
@@ -431,8 +430,38 @@ function updateMap() {
     };
 
     const layers = [
+        new deck.TileLayer({
+            id: 'esri-light-base',
+            data: 'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+            minZoom: 0,
+            maxZoom: 16,
+            tileSize: 256,
+            renderSubLayers: props => {
+                const { bbox: {west, south, east, north} } = props.tile;
+                return new deck.BitmapLayer(props, {
+                    data: null,
+                    image: props.data,
+                    bounds: [west, south, east, north]
+                });
+            }
+        }),
+        new deck.TileLayer({
+            id: 'esri-light-labels',
+            data: 'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+            minZoom: 0,
+            maxZoom: 16,
+            tileSize: 256,
+            renderSubLayers: props => {
+                const { bbox: {west, south, east, north} } = props.tile;
+                return new deck.BitmapLayer(props, {
+                    data: null,
+                    image: props.data,
+                    bounds: [west, south, east, north]
+                });
+            }
+        }),
         new deck.GeoJsonLayer({
-            id: 'poly-fill-' + cl, // 🔥 FIX: Примусово оновлюємо шар при зміні рівня
+            id: 'poly-fill-' + cl,
             data: levelData[cl], extruded: false, stroked: false, filled: true,
             pickable: true, autoHighlight: true, highlightColor: [0, 0, 0, 40], getFillColor: getFillCol,
             updateTriggers: { getFillColor: [cy, cl, key, viewMode, cIndex, kmeansData, maxVal] },
@@ -460,7 +489,6 @@ function updateMap() {
     }
     deckgl.setProps({layers});
 }
-
 
 // ==============================================================================
 // 🖥️ БЛОК 5: ЛОГІКА ІНТЕРФЕЙСУ ТА САЙД-ПАНЕЛІ
