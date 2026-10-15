@@ -17,7 +17,7 @@ The analytical framework integrates data from three primary pillars:
 
 ### Experimental Dataset
 For convenience, a pre-downloaded and processed dataset is available via Google Drive:
-* **Download Parquet Data:** https://drive.google.com/file/d/1K_g-N8xbiAkVdVhMqRYUVWksHcnjmD1-/view?usp=drive_link
+* **Download Parquet Data:** [https://drive.google.com/file/d/1K_g-N8xbiAkVdVhMqRYUVWksHcnjmD1-/view?usp=drive_link](https://zenodo.org/records/21196055)
 
 > **Storage Requirement:** To run the full pipeline, raw data must be converted to `.csv`. The total dataset requires approximately **20 GB** of local storage.
 
